@@ -7,6 +7,13 @@
 (aset js/localStorage "bugout-box-server-seed" (aget bugout "seed"))
 (aset js/window "b" bugout)
 
+;; -------------------------
+;; API
+
+(.register bugout "ping"
+           (fn [pk args cb]
+             (cb #js {"pong" (now)})))
+
 (defn cron []
   (print "cron"))
 
