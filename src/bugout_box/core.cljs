@@ -6,6 +6,9 @@
 (defonce bugout (Bugout. #js {:seed (aget js/localStorage "bugout-box-server-seed")}))
 (aset js/localStorage "bugout-box-server-seed" (aget bugout "seed"))
 
+(defn cron []
+  (print "cron"))
+
 ;; -------------------------
 ;; Views
 
@@ -21,4 +24,7 @@
   (r/render [home-page] (.getElementById js/document "app")))
 
 (defn init! []
+  (js/setInterval
+    (fn [] (cron))
+    1000)
   (mount-root))
