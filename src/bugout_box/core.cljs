@@ -5,6 +5,7 @@
 
 (defonce bugout (Bugout. #js {:seed (aget js/localStorage "bugout-box-server-seed")}))
 (aset js/localStorage "bugout-box-server-seed" (aget bugout "seed"))
+(aset js/window "b" bugout)
 
 (defn cron []
   (print "cron"))
