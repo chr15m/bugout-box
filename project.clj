@@ -6,7 +6,9 @@
 
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [org.clojure/clojurescript "1.10.339"]
-                 [reagent "0.8.1"]]
+                 [binaryage/oops "0.6.2"]
+                 [reagent "0.8.1"]
+                 [mvxcvi/alphabase "1.0.0"]]
 
   :plugins [[lein-cljsbuild "1.1.5"]
             [lein-figwheel "0.5.16"]]
@@ -35,7 +37,8 @@
                          :optimizations :none
                          :pretty-print  true
                          :install-deps true
-                         :npm-deps {"bugout" "chr15m/bugout"}
+                         :npm-deps {"bugout" "chr15m/bugout"
+                                    "qrcodesvg" "1.0.2"}
                          :foreign-libs [{:file "node_modules/bugout/docs/bugout.min.js"
                                          :provides ["cljsjs.bugout"]
                                          :global-exports {cljsjs.bugout Bugout}}]}
