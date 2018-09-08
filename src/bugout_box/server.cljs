@@ -1,6 +1,7 @@
 (ns bugout-box.server
   (:require
     [reagent.core :as r]
+    [cljsjs.bugout :as Bugout]
     [goog.crypt :refer [hexToByteArray byteArrayToHex]]
     [goog.crypt.baseN :refer [recodeString BASE_LOWERCASE_HEXADECIMAL]]
     [goog.string :refer [padNumber]]
@@ -44,6 +45,88 @@
   (str "otpauth://totp/" (.substring address 0 8) "@bugout-box?secret="
        (encode "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567" totp-key)))
 
+; broadcast tab changes to all addresses
+; broadcast api changes to all addresses
+
+(defn broadcast [state message]
+  (for [s (@state :sudoers)]
+    (.send (state :bugout) s message)))
+
+; run checks every second
+(defn cron [])
+
+;; -------------------------
+;; UI functions
+
+(defn hide! [a & [ev]]
+  (reset! a nil)
+  (when ev
+    (.preventDefault ev)))
+
+(defn reveal! [a & ms [ev]]
+  (reset! a true)
+  (when ev
+    (.preventDefault ev))
+  (js/setTimeout
+    #(hide! a)
+    (or ms (* 1000 30))))
+
+;; -------------------------
+;; Views
+
+(defn component-server [state]
+  (let [bugout (@state :bugout)
+        show-pw (r/atom nil)
+        show-key (r/atom nil)
+        totp-key (get-totp-key (aget bugout "seed"))
+        address (.address bugout)]
+    (fn []
+      [:div
+       [:h2 "Bugout Box"]
+       [:h4 (.address bugout)]
+       [:div#sudoers
+        [:h3 "authentication"]
+        [:ul
+         [:ol (if @show-pw
+                [:span (totp totp-key) " " [:a {:on-click (partial hide! show-pw)} "hide"]]
+                [:a {:on-click (partial reveal! show-pw (* 10 1000))} "Reveal one-time-password"])]
+         [:ol (if @show-key
+                [:div
+                 [:div {:dangerouslySetInnerHTML {:__html (.generate (qrcode. (totp-secret-link address totp-key) 400))}}]
+                 [:pre (totp-secret-link address totp-key)]]
+                [:a {:on-click (partial reveal! show-key (* 10 1000))} "Reveal TOTP QR code"])]]
+        [:h3 "state"]
+        [:pre
+         (pr-str @state)]]])))
+
+(defn init-server [state]
+  (defonce bugout (Bugout. #js {:seed (aget js/localStorage "bugout-box-server-seed")}))
+  (aset js/localStorage "bugout-box-server-seed" (aget bugout "seed"))
+  (aset js/window "b" bugout)
+  (swap! state assoc :bugout bugout)
+  
+  (js/console.log "bugout-address" (str js/document.location.href "#" (.address bugout)))
+  
+  (defonce cron-loop
+    (js/setInterval
+      (fn [] (cron))
+      1000))
+  
+  (let [totp-key (get-totp-key (aget bugout "seed"))]
+    (.register bugout "ping"
+               (fn [address args cb]
+                 (cb #js {"pong" (now)})))
+
+    (.register bugout "su"
+               (fn [address args cb]
+                 ; TODO: also receive useragent & IP
+                 ; to help user identify their devices
+                 (if (= (aget args "otp") (totp totp-key))
+                   (do
+                     (swap! state update-in [:sudoers] #(-> % (conj address) set vec))
+                     (cb true))
+                   (cb false))))))
+
 ;; -------------------------
 ;; API
 
@@ -81,73 +164,4 @@
 
 ; (.register execute "") ; run local shell command
 
-; broadcast tab changes to all addresses
-; broadcast api changes to all addresses
-
-; run checks every second
-(defn cron [])
-
-;; -------------------------
-;; UI functions
-
-(defn hide! [a & [ev]]
-  (reset! a nil)
-  (when ev
-    (.preventDefault ev)))
-
-(defn reveal! [a & ms [ev]]
-  (reset! a true)
-  (when ev
-    (.preventDefault ev))
-  (js/setTimeout
-    #(hide! a)
-    (or ms (* 1000 30))))
-
-;; -------------------------
-;; Views
-
-(defn component-server [bugout state]
-  (let [show-pw (r/atom nil)
-        show-key (r/atom nil)
-        totp-key (get-totp-key (aget bugout "seed"))
-        address (.address bugout)]
-    (fn []
-      [:div
-       [:h2 "Bugout Box"]
-       [:h4 (.address bugout)]
-       [:div#sudoers
-        [:h3 "authentication"]
-        [:ul
-         [:ol (if @show-pw
-                [:span (totp totp-key) " " [:a {:on-click (partial hide! show-pw)} "hide"]]
-                [:a {:on-click (partial reveal! show-pw (* 10 1000))} "Reveal one-time-password"])]
-         [:ol (if @show-key
-                [:div
-                 [:div {:dangerouslySetInnerHTML {:__html (.generate (qrcode. (totp-secret-link address totp-key) 400))}}]
-                 [:pre (totp-secret-link address totp-key)]]
-                [:a {:on-click (partial reveal! show-key (* 10 1000))} "Reveal TOTP QR code"])]]
-        [:h3 "state"]
-        [:pre
-         (pr-str @state)]]])))
-
-(defn init-server [bugout state]
-  (defonce cron-loop
-    (js/setInterval
-      (fn [] (cron))
-      1000))
-  
-  (let [totp-key (get-totp-key (aget bugout "seed"))]
-    (.register bugout "ping"
-               (fn [address args cb]
-                 (cb #js {"pong" (now)})))
-
-    (.register bugout "su"
-               (fn [address args cb]
-                 ; TODO: also receive useragent & IP
-                 ; to help user identify their devices
-                 (if (= (aget args "otp") (totp totp-key))
-                   (do
-                     (swap! state update-in [:sudoers] #(-> % (conj address) set vec))
-                     (cb true))
-                   (cb false))))))
 
