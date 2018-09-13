@@ -136,14 +136,17 @@
 
       (.register bugout "su"
                  (fn [address args cb]
-                   ; TODO: also receive useragent & IP
-                   ; to help user identify their devices
                    (send-back cb
                               (if (= (aget args "totp") (totp totp-key))
                                 (do
                                   (swap! state update-in [:shared :sudoers] assoc (keyword address) {:client (aget args "client") :agent (aget args "agent")})
                                   (shared-state @state))
                                 {:error "TOTP authentication failed."}))))
+
+      (.register bugout "su-remove"
+                 (fn [address args cb]
+                   (swap! state update-in [:shared :sudoers] dissoc (keyword args))
+                   (send-back cb (shared-state @state))))
 
       (.register bugout "get-state"
                  (fn [address args cb]

@@ -58,6 +58,10 @@
              :agent js/navigator.userAgent}
         (partial update-remote! state)))
 
+(defn remove-authentication! [state address]
+  (swap! state dissoc :remote)
+  (.rpc (@state :bugout) "su-remove" (name address) (partial update-remote! state)))
+
 (defn component-enter-address [state]
   (let [address (r/atom "")]
     (fn []
@@ -71,16 +75,19 @@
   [:div "Connecting..."])
 
 (defn component-main-interface [state]
-  [:div
-   [:h3 (.address (@state :bugout))]
-   [:div "Connected to " (.-identifier (@state :bugout))]
-   [:div (@state :connections) " connections"]
-   [:h2 "sudoers"]
-   [:ul
-    (for [[s details] (-> @state :remote :sudoers)]
-      [:li {:key s} s
-       [:div (details :client)]
-       [:div (details :agent)]])]])
+  (let [me (.address (@state :bugout))]
+    [:div
+     [:h3 me]
+     [:div "Connected to " (.-identifier (@state :bugout))]
+     [:div (@state :connections) " connections"]
+     [:h2 "sudoers"]
+     [:ul
+      (for [[s details] (-> @state :remote :sudoers)]
+        [:li {:key s} s (when (= s (keyword me)) [:span " (current device)"])
+         [:div (details :client)]
+         [:div (details :agent)]
+         (when (not= s (keyword me))
+           [:a {:href "#" :on-click #(do (remove-authentication! state s) (.preventDefault %))} "(remove)"])])]]))
 
 (defn component-request [state]
   [:div "Waiting for server..."])
