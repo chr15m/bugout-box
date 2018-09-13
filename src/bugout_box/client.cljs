@@ -62,6 +62,10 @@
   (swap! state dissoc :remote)
   (.rpc (@state :bugout) "su-remove" (name address) (partial update-remote! state)))
 
+(defn open-tab! [state n u]
+  (swap! state dissoc :remote)
+  (.rpc (@state :bugout) "tab-open" #js {:name n :url u} (partial update-remote! state)))
+
 (defn component-enter-address [state]
   (let [address (r/atom "")]
     (fn []
@@ -74,12 +78,27 @@
 (defn component-connecting [state]
   [:div "Connecting..."])
 
+(defn component-tab-input [state]
+  (let [n (r/atom "")
+        u (r/atom "")]
+    (fn []
+      [:div
+       [:input {:placeholder "name" :value @n :on-change #(reset! n (.. % -target -value))}]
+       [:input {:placeholder "url" :value @u :on-change #(reset! u (.. % -target -value))}]
+       [:button {:on-click (partial open-tab! state @n @u)} "open"]])))
+
 (defn component-main-interface [state]
   (let [me (.address (@state :bugout))]
     [:div
      [:h3 me]
      [:div "Connected to " (.-identifier (@state :bugout))]
      [:div (@state :connections) " connections"]
+     [:h2 "tabs"]
+     [component-tab-input state]
+     [:ul
+      (for [[t details] (-> @state :remote :tabs)]
+        [:li {:key t} t details
+         [:a {:href "#"} "(close)"]])]
      [:h2 "sudoers"]
      [:ul
       (for [[s details] (-> @state :remote :sudoers)]

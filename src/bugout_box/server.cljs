@@ -148,6 +148,11 @@
                    (swap! state update-in [:shared :sudoers] dissoc (keyword args))
                    (send-back cb (shared-state @state))))
 
+      (.register bugout "tab-open"
+                 (fn [address args cb]
+                   (swap! state update-in [:shared :tabs] assoc (keyword (aget args "name")) args)
+                   (send-back cb (shared-state @state))))
+
       (.register bugout "get-state"
                  (fn [address args cb]
                    (print "get state call")
