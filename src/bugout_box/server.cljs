@@ -11,13 +11,6 @@
 
 (defonce storage (r/atom {}))
 
-(defn get-totp-key [seed]
-  ; (hexToByteArray "48656c6c6f21deadbeef")
-  (.slice (let [shasum (Sha512_256.)]
-            (.update shasum (str "totp-seed-" seed "-totp-seed"))
-            (.digest shasum))
-          0 20))
-
 ;; -------------------------
 ;; Functions
 
@@ -25,12 +18,13 @@
   (.getTime (js/Date.)))
 
 (defn authenticate [sudoers address]
-  (when (not (contains? (set sudoers) address))
-    #js {"error" (str address " is not in sudoers.")}))
+  (when (not (get sudoers (keyword address)))
+    {:error (str address " is not in sudoers.")}))
 
 ; reverse engineering of this:
 ; http://blog.tinisles.com/2011/10/google-authenticator-one-time-password-algorithm-in-javascript/
 (defn totp [totp-key]
+  "Compute TOTP numeral code string. totp-key must be a byte array."
   (let [epoch (-> (js/Date.) (.getTime) (/ 1000.0) (js/Math.round))
         t (-> epoch (/ 30) (js/Math.floor) )
         t (-> (str "0000000000000000" (.toString t 16)) (.slice -16) (hexToByteArray))
@@ -42,15 +36,29 @@
     otp))
 
 (defn totp-secret-link [address totp-key]
+  "Generate link for TOTP apps to import secret. totp-key must be a byte array."
   (str "otpauth://totp/" (.substring address 0 8) "@bugout-box?secret="
        (encode "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567" totp-key)))
+
+(defn get-totp-key [seed]
+  ; (hexToByteArray "48656c6c6f21deadbeef")
+  (.slice (let [shasum (Sha512_256.)]
+            (.update shasum (str "totp-seed-" seed "-totp-seed"))
+            (.digest shasum))
+          0 20))
 
 ; broadcast tab changes to all addresses
 ; broadcast api changes to all addresses
 
 (defn broadcast [state message]
-  (for [s (@state :sudoers)]
-    (.send (state :bugout) s message)))
+  (for [s (-> @state :shared :sudoers)]
+    (.send (state :bugout) s (clj->js message))))
+
+(defn send-back [cb result]
+  (cb (clj->js result)))
+
+(defn shared-state [state]
+  (-> state :shared))
 
 ; run checks every second
 (defn cron [])
@@ -84,7 +92,8 @@
       [:div
        [:h2 "Bugout Box"]
        [:h4 (.address bugout)]
-       [:div#sudoers
+       [:p (@state :connections) " connections"]
+       [:div
         [:h3 "authentication"]
         [:ul
          [:ol (if @show-pw
@@ -100,32 +109,47 @@
          (pr-str @state)]]])))
 
 (defn init-server [state]
-  (defonce bugout (Bugout. #js {:seed (aget js/localStorage "bugout-box-server-seed")}))
-  (aset js/localStorage "bugout-box-server-seed" (aget bugout "seed"))
-  (aset js/window "b" bugout)
-  (swap! state assoc :bugout bugout)
-  
-  (js/console.log "bugout-address" (str js/document.location.href "#" (.address bugout)))
-  
   (defonce cron-loop
     (js/setInterval
       (fn [] (cron))
       1000))
-  
-  (let [totp-key (get-totp-key (aget bugout "seed"))]
-    (.register bugout "ping"
-               (fn [address args cb]
-                 (cb #js {"pong" (now)})))
 
-    (.register bugout "su"
-               (fn [address args cb]
-                 ; TODO: also receive useragent & IP
-                 ; to help user identify their devices
-                 (if (= (aget args "otp") (totp totp-key))
-                   (do
-                     (swap! state update-in [:sudoers] #(-> % (conj address) set vec))
-                     (cb true))
-                   (cb false))))))
+  (swap! state (fn [old-state]
+                 (if (old-state :bugout)
+                   old-state
+                   (let [bugout (Bugout. #js {:seed (aget js/localStorage "bugout-box-server-seed")})]
+                     (aset js/localStorage "bugout-box-server-seed" (aget bugout "seed"))
+                     (aset js/window "b" bugout)
+                     (.on bugout "rpc" (partial js/console.log "rpc:"))
+                     (.on bugout "connections" (partial js/console.log "connections:"))
+                     (.on bugout "connections" #(swap! state assoc :connections %))
+                     (assoc old-state :bugout bugout)))))
+
+  (let [bugout (@state :bugout)]
+    (js/console.log "bugout-address" (.replace js/document.location.href "server.html" (str "#" (.address bugout))))
+
+    (let [totp-key (get-totp-key (aget bugout "seed"))]
+
+      (.register bugout "ping"
+                 (fn [address args cb]
+                   (send-back cb {:pong (now)})))
+
+      (.register bugout "su"
+                 (fn [address args cb]
+                   ; TODO: also receive useragent & IP
+                   ; to help user identify their devices
+                   (send-back cb
+                              (if (= (aget args "totp") (totp totp-key))
+                                (do
+                                  (swap! state update-in [:shared :sudoers] assoc (keyword address) {:client (aget args "client") :agent (aget args "agent")})
+                                  (shared-state @state))
+                                {:error "TOTP authentication failed."}))))
+
+      (.register bugout "get-state"
+                 (fn [address args cb]
+                   (print "get state call")
+                   (send-back cb (or (authenticate (-> @state :shared :sudoers) address)
+                                     (shared-state @state))))))))
 
 ;; -------------------------
 ;; API
