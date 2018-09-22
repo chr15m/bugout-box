@@ -1,6 +1,7 @@
 (ns bugout-box.server
   (:require
     [reagent.core :as r]
+    [alandipert.storage-atom :refer [local-storage]]
     [cljsjs.bugout :as Bugout]
     [goog.crypt :refer [hexToByteArray byteArrayToHex]]
     [goog.crypt.baseN :refer [recodeString BASE_LOWERCASE_HEXADECIMAL]]
@@ -9,7 +10,7 @@
     ["qrcodesvg/lib" :as qrcode])
   (:import [goog.crypt Sha512_256 Hmac Sha1]))
 
-(defonce storage (r/atom {}))
+(defonce storage (local-storage (r/atom {}) "bugout-box-storage"))
 
 ;; -------------------------
 ;; Functions
@@ -165,26 +166,66 @@
 
       (.register bugout "su-remove"
                  (fn [address args cb]
-                   (swap! state update-in [:shared :sudoers] dissoc (keyword args))
-                   (send-back cb (shared-state @state))))
+                   (send-back cb (or (authenticate (-> @state :shared :sudoers) address)
+                                     (do 
+                                       (swap! state update-in [:shared :sudoers] dissoc (keyword args))
+                                       (shared-state @state))))))
 
       (.register bugout "tab-open"
                  (fn [address args cb]
-                   (swap! state update-in [:shared :tabs] assoc (byteArrayToHex (.randomBytes (.-nacl (@state :bugout)) 4)) args)
-                   (sync-tabs! state)
-                   (send-back cb (shared-state @state))))
+                   (send-back cb (or (authenticate (-> @state :shared :sudoers) address)
+                                     (do
+                                       (swap! state update-in [:shared :tabs] assoc (byteArrayToHex (.randomBytes (.-nacl (@state :bugout)) 4)) args)
+                                       (sync-tabs! state)
+                                       (shared-state @state))))))
 
       (.register bugout "tab-close"
                  (fn [address args cb]
-                   (swap! state update-in [:shared :tabs] dissoc (aget args "id"))
-                   (sync-tabs! state)
-                   (send-back cb (shared-state @state))))
+                   (send-back cb (or (authenticate (-> @state :shared :sudoers) address)
+                                     (do
+                                       (swap! state update-in [:shared :tabs] dissoc (aget args "id"))
+                                       (sync-tabs! state)
+                                       (shared-state @state))))))
 
       (.register bugout "get-state"
                  (fn [address args cb]
                    (print "get state call")
                    (send-back cb (or (authenticate (-> @state :shared :sudoers) address)
-                                     (shared-state @state))))))))
+                                     (shared-state @state)))))
+
+      (.register bugout "storage-set"
+                 (fn [address args cb]
+                   (send-back cb (or (authenticate (-> @state :shared :sudoers) address)
+                                     (swap! storage assoc-in (vec (aget args "key")) (aget args "value"))))))
+
+      (.register bugout "storage-remove"
+                 (fn [address args cb]
+                   (send-back cb (or (authenticate (-> @state :shared :sudoers) address)
+                                     (let [k (vec (aget args "key"))]
+                                       (if (> (count k) 1)
+                                         (swap! storage update-in (butlast k) dissoc (last k))
+                                         (swap! storage dissoc (first k))))))))
+
+      (.register bugout "storage-get"
+                 (fn [address args cb]
+                   (send-back cb (or (authenticate (-> @state :shared :sudoers) address)
+                                     (get-in @storage (vec (aget args "key")))))))
+
+      ; if some key is set to some value
+      ; then set this other key to this other value
+      (.register bugout "storage-compare-and-set"
+                 (fn [address args cb]
+                   (send-back cb (or (authenticate (-> @state :shared :sudoers) address)
+                                     (swap! storage
+                                            (fn [storage-previous]
+                                              (if (= (get-in storage-previous (vec (aget args "key-cas"))) (aget args "value-cas"))
+                                                (assoc-in storage-previous (vec (aget args "key")) (aget args "value"))
+                                                storage-previous)))))))
+
+      (.register bugout "storage-keys"
+                 (fn [address args cb]
+                   (send-back cb (or (authenticate (-> @state :shared :sudoers) address)
+                                     (keys @storage))))))))
 
 ;; -------------------------
 ;; API
@@ -204,16 +245,6 @@
 ; (.register bugout "api-keys" (fn []))
 
 ; (.register bugout "api-remove-call")
-
-; (.register bugout "storage-set" (fn []))
-
-; (.register bugout "storage-get" (fn []))
-
-; (.register bugout "storage-keys" (fn []))
-
-; (.register bugout "storage-compare-and-set")
-
-; (.register bugout "storage-remove" (fn []))
 
 ; (.register bugout "inbox-store")
 

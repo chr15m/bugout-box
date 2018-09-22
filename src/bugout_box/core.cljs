@@ -5,11 +5,10 @@
     [bugout-box.client :refer [init-client component-client]]))
 
 ; TODO;
-; * open/close server tabs
+; * key-value storage get/set
 ; * webtorrent file seeding
-; * storage get/set
 ; * check for updates
-; 
+;
 ; * message inbox
 ; * register API calls
 ;

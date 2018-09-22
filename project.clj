@@ -8,7 +8,8 @@
                  [org.clojure/clojurescript "1.10.339"]
                  [binaryage/oops "0.6.2"]
                  [reagent "0.8.1"]
-                 [mvxcvi/alphabase "1.0.0"]]
+                 [mvxcvi/alphabase "1.0.0"]
+                 [alandipert/storage-atom "1.2.4"]]
 
   :plugins [[lein-cljsbuild "1.1.5"]
             [lein-figwheel "0.5.16"]]
