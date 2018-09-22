@@ -62,7 +62,23 @@
 
 (defn sync-tabs! [state]
   "Ensure the desired tabs are open."
-  (js/console.log "sync-tabs"))
+  (let [tabs (-> @state :shared :tabs)
+        tabrefs (-> @state :tabrefs)
+        unopened-tabs (clojure.set/difference (set (keys tabs)) (set (keys tabrefs)))
+        unclosed-tabs (clojure.set/difference (set (keys tabrefs)) (set (keys tabs)))]
+    (print "tab changes" unopened-tabs unclosed-tabs)
+    (print "tabs to open:" (map #(aget (tabs %) "url") unopened-tabs))
+    (print "tabs to close:" unclosed-tabs)
+    ; open all unopened tabs
+    (doseq [t unopened-tabs]
+      (let [url (aget (tabs t) "url")
+            w (.open js/window url t)]
+        (swap! state assoc-in [:tabrefs t] w)))
+    ; close all closed tabs
+    (doseq [t unclosed-tabs]
+      (when (tabrefs t)
+        (.close (tabrefs t)))
+      (swap! state update-in [:tabrefs] dissoc t))))
 
 ; run checks every second
 (defn cron [])
