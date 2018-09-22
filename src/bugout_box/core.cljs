@@ -5,14 +5,15 @@
     [bugout-box.client :refer [init-client component-client]]))
 
 ; TODO;
-; * open/close tabs 
+; * open/close server tabs
 ; * webtorrent file seeding
-;
-; * inbox
-; * .js based server specification
-; * server.html bugout template
 ; * storage get/set
+; * check for updates
+; 
+; * message inbox
 ; * register API calls
+;
+; * .js based server specification
 ; * shell access interface
 ; * gpio access on rpi
 

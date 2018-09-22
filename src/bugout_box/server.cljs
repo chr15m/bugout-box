@@ -60,6 +60,10 @@
 (defn shared-state [state]
   (-> state :shared))
 
+(defn sync-tabs! [state]
+  "Ensure the desired tabs are open."
+  (js/console.log "sync-tabs"))
+
 ; run checks every second
 (defn cron [])
 
@@ -150,7 +154,14 @@
 
       (.register bugout "tab-open"
                  (fn [address args cb]
-                   (swap! state update-in [:shared :tabs] assoc (keyword (aget args "name")) args)
+                   (swap! state update-in [:shared :tabs] assoc (byteArrayToHex (.randomBytes (.-nacl (@state :bugout)) 4)) args)
+                   (sync-tabs! state)
+                   (send-back cb (shared-state @state))))
+
+      (.register bugout "tab-close"
+                 (fn [address args cb]
+                   (swap! state update-in [:shared :tabs] dissoc (aget args "id"))
+                   (sync-tabs! state)
                    (send-back cb (shared-state @state))))
 
       (.register bugout "get-state"

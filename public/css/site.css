@@ -32,3 +32,8 @@ a {
 a:hover {
   text-decoration: underline;
 }
+
+#add-tab input {
+  width: 40em;
+  max-width: 100%;
+}
