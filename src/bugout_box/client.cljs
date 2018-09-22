@@ -70,6 +70,14 @@
   (swap! state dissoc :remote)
   (.rpc (@state :bugout) "tab-close" #js {:id (name t)} (partial update-remote! state)))
 
+(defn add-torrent! [state m]
+  (swap! state dissoc :remote)
+  (.rpc (@state :bugout) "torrent-add" #js {:magnet m} (partial update-remote! state)))
+
+(defn remove-torrent! [state i]
+  (swap! state dissoc :remote)
+  (.rpc (@state :bugout) "torrent-remove" #js {:infohash (name i)} (partial update-remote! state)))
+
 (defn component-enter-address [state]
   (let [address (r/atom "")]
     (fn []
@@ -89,6 +97,13 @@
        [:input {:placeholder "https://..." :value @u :on-change #(reset! u (.. % -target -value))}]
        [:button {:on-click (partial open-tab! state @u)} "open"]])))
 
+(defn component-torrent-input [state]
+  (let [m (r/atom "")]
+    (fn []
+      [:div#add-tab
+       [:input {:placeholder "magnet:?xt=urn:btih:..." :value @m :on-change #(reset! m (.. % -target -value))}]
+       [:button {:on-click (partial add-torrent! state @m)} "add"]])))
+
 (defn component-main-interface [state]
   (let [me (.address (@state :bugout))]
     [:div
@@ -101,6 +116,12 @@
       (for [[t details] (-> @state :remote :tabs)]
         [:li {:key t} (details :url)
          [:a {:href "#" :on-click #(do (close-tab! state t) (.preventDefault %))} " (close)"]])]
+     [:h2 "torrents"]
+     [component-torrent-input state]
+     [:ul#torrents
+      (for [[t details] (-> @state :remote :torrents)]
+        [:li {:key t} t
+         [:a {:href "#" :on-click #(do (remove-torrent! state t) (.preventDefault %))} " (remove)"]])]
      [:h2 "sudoers"]
      [:ul#sudoers
       (for [[s details] (-> @state :remote :sudoers)]

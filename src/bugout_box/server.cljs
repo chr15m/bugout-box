@@ -12,6 +12,8 @@
 
 (defonce storage (local-storage (r/atom {}) "bugout-box-storage"))
 
+(def re-magnet #"magnet:\?xt=urn:[a-z0-9A-Z]+:([a-z0-9A-Z]{32})")
+
 ;; -------------------------
 ;; Functions
 
@@ -81,6 +83,23 @@
         (.close (tabrefs t)))
       (swap! state update-in [:tabrefs] dissoc t))))
 
+(defn sync-torrents! [state]
+  "Ensure the desired torrents are seeded."
+  (let [torrents (-> @state :shared :torrents)
+        torrents-wt (.. (@state :bugout) -wt -torrents)
+        wanted-keys (set (keys torrents))
+        added-keys (set (remove nil? (map #(when (.-bugoutseeded %) (.-infoHash %)) torrents-wt)))
+        unadded-torrents (clojure.set/difference wanted-keys added-keys)
+        unremoved-torrents (clojure.set/difference added-keys wanted-keys)]
+    (print "sync-torrents!")
+    (print "changes:" unadded-torrents unremoved-torrents)
+    (doseq [i unadded-torrents]
+      (let [magnet-link (get torrents i)
+            torrent (.add (.-wt (@state :bugout)) magnet-link)]
+        (aset torrent "bugoutseeded" true)))
+    (doseq [i unremoved-torrents]
+      (.remove (.-wt (@state :bugout)) i))))
+
 ; run checks every second
 (defn cron [])
 
@@ -145,7 +164,7 @@
                      (.on bugout "connections" (partial js/console.log "connections:"))
                      (.on bugout "connections" #(swap! state assoc :connections %))
                      (assoc old-state :bugout bugout)))))
-
+  
   (let [bugout (@state :bugout)]
     (js/console.log "bugout-address" (.replace js/document.location.href "server.html" (str "#" (.address bugout))))
 
@@ -185,6 +204,23 @@
                                      (do
                                        (swap! state update-in [:shared :tabs] dissoc (aget args "id"))
                                        (sync-tabs! state)
+                                       (shared-state @state))))))
+
+      (.register bugout "torrent-add"
+                 (fn [address args cb]
+                   (send-back cb (or (authenticate (-> @state :shared :sudoers) address)
+                                     (let [[uri infohash] (re-find re-magnet (aget args "magnet"))]
+                                       (when infohash
+                                         (swap! state update-in [:shared :torrents] assoc infohash (aget args "magnet")))
+                                       (sync-torrents! state)
+                                       (shared-state @state))))))
+
+      (.register bugout "torrent-remove"
+                 (fn [address args cb]
+                   (send-back cb (or (authenticate (-> @state :shared :sudoers) address)
+                                     (do
+                                       (swap! state update-in [:shared :torrents] dissoc (aget args "infohash"))
+                                       (sync-torrents! state)
                                        (shared-state @state))))))
 
       (.register bugout "get-state"
@@ -229,16 +265,6 @@
 
 ;; -------------------------
 ;; API
-
-; (.register bugout "su-remove")
-
-;(.register bugout "tabs-list")
-
-;(.register bugout "tabs-open")
-
-;(.register bugout "tabs-close")
-
-;(.register bugout "seed-infohash")
 
 ; (.register bugout "api-set" (fn []))
 
