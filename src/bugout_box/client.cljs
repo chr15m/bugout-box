@@ -82,7 +82,7 @@
   (let [address (r/atom "")]
     (fn []
       [:div
-       [:input {:placeholder "Bugout server address"
+       [:input.full {:placeholder "Bugout box address"
                 :value @address
                 :on-change #(reset! address (.. % -target -value))}]
        [:button {:on-click (partial connect! state @address)} "Connect"]])))
@@ -110,7 +110,7 @@
      [:h3 me]
      [:div "Connected to " (.-identifier (@state :bugout))]
      [:div (@state :connections) " connections"]
-     [:h2 "tabs"]
+     [:h2 "server apps"]
      [component-tab-input state]
      [:ul#tabs
       (for [[t details] (-> @state :remote :tabs)]
@@ -139,7 +139,7 @@
     (fn []
       [:div
        [:div.error (-> @state :remote :error)]
-       [:input {:placeholder "One-time password"
+       [:input.totp {:placeholder "One-time password"
                 :value @totp
                 :type "number"
                 :min 1
@@ -149,12 +149,14 @@
        [:button {:on-click (partial authenticate! state @totp)} "Authenticate"]])))
 
 (defn component-client [state]
-  (cond
-    (nil? (@state :address)) [component-enter-address state]
-    (<= (@state :connections) 0) [component-connecting state]
-    (not (@state :remote)) [component-request state]
-    (not (is-authenticated? @state)) [component-authenticate state]
-    :else [component-main-interface state]))
+  [:div
+   [:img.logo {:src "bugout-box-logo.svg"}]
+   (cond
+     (nil? (@state :address)) [component-enter-address state]
+     (<= (@state :connections) 0) [component-connecting state]
+     (not (@state :remote)) [component-request state]
+     (not (is-authenticated? @state)) [component-authenticate state]
+     :else [component-main-interface state])])
 
 (defn init-client [state]
   (let [address (.. js/document -location -hash)]

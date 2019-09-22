@@ -37,3 +37,13 @@ a:hover {
   width: 40em;
   max-width: 100%;
 }
+
+.logo {
+  display: block;
+  margin: auto;
+  margin-bottom: 2em;
+}
+
+input.totp {
+  min-width: 13em;
+}
