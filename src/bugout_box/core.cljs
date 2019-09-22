@@ -27,4 +27,6 @@
   (r/render [(if is-server? component-server component-client) state] (.getElementById js/document "app")))
 
 (defn init! []
-  (mount-root))
+  (if (try js/module (catch :default e))
+    (init-server state)
+    (mount-root)))
